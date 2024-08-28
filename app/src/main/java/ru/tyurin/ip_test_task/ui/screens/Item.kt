@@ -37,8 +37,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +61,13 @@ import java.util.Locale
 
 @Composable
 fun ItemListScreen(viewModel: GadgetViewModel = hiltViewModel()) {
-    val gadgets by viewModel.gadgets.observeAsState(initial = emptyList())
-    var searchText by remember { mutableStateOf("") }
-    var selectedGadgetForEdit by remember { mutableStateOf<GadgetEntity?>(null) }
-    var selectedGadgetForDelete by remember { mutableStateOf<GadgetEntity?>(null) }
+    val gadgets by viewModel.gadgets.collectAsState()
+    var searchText by remember { mutableStateOf(viewModel.getSearchQuery()) }
+    val selectedGadgetForEdit by viewModel.selectedGadgetForEdit.collectAsState()
+    val selectedGadgetForDelete by viewModel.selectedGadgetForDelete.collectAsState()
 
-    val filteredGadgets = gadgets.filter { gadget ->
-        gadget.name.contains(searchText, ignoreCase = true)
+    LaunchedEffect(searchText) {
+        viewModel.setSearchQuery(searchText)
     }
 
     Column(
@@ -74,10 +75,12 @@ fun ItemListScreen(viewModel: GadgetViewModel = hiltViewModel()) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-
         OutlinedTextField(
             value = searchText,
-            onValueChange = { searchText = it },
+            onValueChange = { newText ->
+                searchText = newText
+                viewModel.setSearchQuery(newText)
+            },
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = {
                 Icon(imageVector = Icons.Default.Search, contentDescription = stringResource(R.string.search_icon))
@@ -96,11 +99,11 @@ fun ItemListScreen(viewModel: GadgetViewModel = hiltViewModel()) {
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn {
-            items(filteredGadgets) { gadget ->
+            items(gadgets) { gadget ->
                 GadgetItem(
                     gadget = gadget,
-                    onEditClick = { selectedGadgetForEdit = gadget },
-                    onDeleteClick = { selectedGadgetForDelete = gadget }
+                    onEditClick = { viewModel.setSelectedGadgetForEdit(gadget) },
+                    onDeleteClick = { viewModel.setSelectedGadgetForDelete(gadget) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -110,25 +113,24 @@ fun ItemListScreen(viewModel: GadgetViewModel = hiltViewModel()) {
     selectedGadgetForEdit?.let { gadget ->
         EditGadgetDialog(
             gadget = gadget,
-            onDismiss = { selectedGadgetForEdit = null },
+            onDismiss = { viewModel.setSelectedGadgetForEdit(null) },
             onSave = { editedGadget ->
                 viewModel.editGadget(editedGadget)
-                selectedGadgetForEdit = null
+                viewModel.setSelectedGadgetForEdit(null)
             }
         )
     }
 
     selectedGadgetForDelete?.let { gadget ->
         DeleteConfirmationDialog(
-            onDismiss = { selectedGadgetForDelete = null },
+            onDismiss = { viewModel.setSelectedGadgetForDelete(null) },
             onConfirmDelete = {
                 viewModel.removeGadget(gadget)
-                selectedGadgetForDelete = null
+                viewModel.setSelectedGadgetForDelete(null)
             }
         )
     }
 }
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GadgetItem(
